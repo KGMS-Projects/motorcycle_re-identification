@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Motorcycle re-identification review</title>
+<style>
+:root{
+  --bg:#f3f5f8;--surface:#fff;--sunken:#eef1f5;--ink:#16202a;--muted:#5b6a79;--line:#dce2e9;
+  --a:#c4541f;--b:#2b66ad;--focus:#2b66ad;
+  --ok:#14694380;--ok-ink:#12643f;--ok-bg:#dff3e8;
+  --unc-ink:#7f5508;--unc-bg:#fcefcf;
+  --bad-ink:#9b2c2c;--bad-bg:#fae0e0;
+  --shadow:0 1px 2px rgba(20,32,42,.06),0 4px 14px rgba(20,32,42,.05);
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0f151b;--surface:#18212a;--sunken:#121a21;--ink:#e7ecf1;--muted:#92a2b1;--line:#2a3743;
+  --a:#f0905c;--b:#75abea;--focus:#75abea;
+  --ok-ink:#6fd3a2;--ok-bg:#133626;--unc-ink:#ebc366;--unc-bg:#3a2f12;--bad-ink:#f09a9a;--bad-bg:#40201f;
+  --shadow:0 1px 2px rgba(0,0,0,.4);}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--font);-webkit-font-smoothing:antialiased}
+h1,h2,h3,p{margin:0}
+h2{font-size:15px;font-weight:650}
+h3{font-size:13px;font-weight:650;margin-bottom:6px}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:6px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}.small{font-size:12px}
+
+/* ---------- top bar ---------- */
+.top{display:flex;align-items:center;gap:16px;padding:12px 24px;background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+.brand h1{font-size:17px;font-weight:700;letter-spacing:-.01em}
+.brand p{font-size:12px;color:var(--muted)}
+.statusbar{margin-left:auto;display:flex;align-items:center;gap:12px;min-width:0}
+#status{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#status.error{color:var(--bad-ink);font-weight:600}
+#progress{width:220px;height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+#progress i{display:block;height:100%;width:0;background:var(--ink);transition:width .4s}
+#progress.busy i{background:linear-gradient(90deg,var(--ink),var(--muted))}
+.exports{display:flex;gap:8px}
+
+/* ---------- buttons ---------- */
+button,.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:7px 14px;font-weight:550;text-decoration:none;line-height:1.4}
+button:hover,.btn:hover{border-color:var(--muted)}
+button.primary{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+button.primary:hover{border-color:var(--ink);opacity:.9}
+button:disabled{opacity:.45;cursor:not-allowed}
+
+/* ---------- toolbar ---------- */
+.toolbar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;padding:16px 24px 8px}
+.cam{display:flex;flex-direction:column;gap:4px;min-width:280px}
+.cam label.title{display:flex;align-items:center;gap:8px;font-weight:650}
+.cam .dot{width:10px;height:10px;border-radius:3px}
+.cam.a .dot{background:var(--a)}.cam.b .dot{background:var(--b)}
+.cam .row{display:flex;gap:6px}
+.cam select{flex:1;min-width:0;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+
+/* ---------- welcome ---------- */
+.welcome{margin:16px 24px;padding:28px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.welcome h2{font-size:20px;margin-bottom:6px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:18px}
+.step{background:var(--sunken);border-radius:10px;padding:14px}
+.step b{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--bg);font-size:13px;margin-bottom:8px}
+.step p{color:var(--muted)}
+
+/* ---------- workspace ---------- */
+.workspace{display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:16px;padding:8px 24px 32px;align-items:start}
+.main{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.card>header{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;padding:12px 14px 0}
+.card .body{padding:12px 14px 14px}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.stat{color:var(--ink);font-weight:400;align-items:flex-start;padding:10px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);text-align:left;display:flex;flex-direction:column}
+.stat b{font-size:22px;line-height:1.2}
+.stat span{font-size:12px;color:var(--muted)}
+.stat.accepted b{color:var(--ok-ink)}.stat.uncertain b{color:var(--unc-ink)}.stat.rejected b{color:var(--bad-ink)}
+button.stat{cursor:pointer}button.stat:hover{border-color:var(--muted)}
+
+.players{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.player{padding:10px}
+.player .cap{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:650;min-width:0}
+.player .cap .dot{width:10px;height:10px;border-radius:3px;flex:none}
+.player.a .dot{background:var(--a)}.player.b .dot{background:var(--b)}
+.player .cap span.name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.player .cap .time{margin-left:auto;color:var(--muted);font-weight:500}
+.stage{position:relative;background:#000;border-radius:8px;overflow:hidden;min-height:150px}
+.stage video{display:block;width:100%;height:auto}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
+.timeline{position:relative;height:22px;margin-top:8px;background:var(--sunken);border-radius:6px;cursor:pointer;overflow:hidden}
+.timeline .seg{position:absolute;top:3px;bottom:3px;min-width:6px;border:0;border-radius:4px;padding:0;opacity:.55}
+.player.a .seg{background:var(--a)}.player.b .seg{background:var(--b)}
+.timeline .seg:hover{opacity:.85}
+.timeline .seg.on{opacity:1;outline:2px solid var(--ink);outline-offset:1px;z-index:2}
+.timeline .head{position:absolute;top:0;bottom:0;width:2px;background:var(--ink);pointer-events:none;z-index:3}
+.transport{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.transport .hint{color:var(--muted);font-size:12px;margin-left:auto}
+kbd{font:600 11px ui-monospace,monospace;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;background:var(--surface)}
+
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.tabs{display:flex;gap:4px;background:var(--sunken);padding:3px;border-radius:9px}
+.tabs button{border:0;background:none;padding:5px 12px;border-radius:7px;font-weight:600;color:var(--muted);white-space:nowrap}
+.tabs button[aria-selected=true]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.card header select{margin-left:auto;border:1px solid var(--line);border-radius:7px;padding:4px 8px;background:var(--surface)}
+.list{display:flex;flex-direction:column;gap:6px;max-height:430px;overflow:auto;padding:2px}
+.row-item{color:var(--ink);font-weight:400;display:grid;grid-template-columns:auto 64px 1fr;gap:10px;align-items:center;padding:7px;border:1px solid var(--line);border-radius:10px;background:var(--surface);cursor:pointer;text-align:left;width:100%}
+.row-item:hover{border-color:var(--muted)}
+.row-item[aria-selected=true]{border-color:var(--ink);box-shadow:inset 3px 0 0 var(--ink);background:var(--sunken)}
+.row-item img{width:64px;height:48px;object-fit:cover;border-radius:6px;background:#222}
+.rank{width:22px;height:22px;border-radius:50%;background:var(--sunken);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--muted)}
+.row-item .t{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.meter{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:5px}
+.meter i{display:block;height:100%;border-radius:3px;background:var(--muted)}
+.meter.accepted i{background:var(--ok-ink)}.meter.uncertain i{background:var(--unc-ink)}.meter.rejected i{background:var(--bad-ink)}
+.empty{color:var(--muted);padding:18px 8px;text-align:center}
+
+.chip{display:inline-flex;align-items:center;gap:4px;padding:1px 9px;border-radius:999px;font-size:12px;font-weight:650;white-space:nowrap}
+.chip b{font-size:11px}
+.chip.accepted{background:var(--ok-bg);color:var(--ok-ink)}
+.chip.uncertain{background:var(--unc-bg);color:var(--unc-ink)}
+.chip.rejected{background:var(--bad-bg);color:var(--bad-ink)}
+
+/* ---------- evidence panel ---------- */
+.evidence{position:sticky;top:76px;max-height:calc(100vh - 92px);overflow:auto;padding:0}
+.evidence .inner{padding:14px}
+.pairhead{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.pairhead h2{font-size:17px}
+.pairhead .a{color:var(--a)}.pairhead .b{color:var(--b)}
+.verdict{display:grid;grid-template-columns:40px 1fr;gap:12px;padding:12px;border-radius:12px;margin-bottom:12px}
+.verdict .ic{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:20px;font-weight:700;background:rgba(255,255,255,.55);color:inherit}
+.verdict.accepted{background:var(--ok-bg);color:var(--ok-ink)}
+.verdict.uncertain{background:var(--unc-bg);color:var(--unc-ink)}
+.verdict.rejected{background:var(--bad-bg);color:var(--bad-ink)}
+.verdict h3{font-size:15px;margin:0}
+.verdict p{font-size:13px;margin-top:2px}
+.gauges{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+.gauge span{display:flex;justify-content:space-between;font-size:12px}
+.gauge .meter{background:rgba(0,0,0,.12);margin-top:3px}
+.gauge .meter i{background:currentColor}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}
+.compare figure{margin:0}
+.compare img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:10px;background:#222;display:block}
+.compare figcaption{margin-top:4px;font-size:12px;color:var(--muted)}
+.compare figcaption b{color:var(--ink)}
+.ev{margin:0 0 14px;padding:0;list-style:none;display:flex;flex-direction:column;gap:5px}
+.ev li{display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:start;padding:7px 9px;border-radius:8px;background:var(--sunken)}
+.ev .ico{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;margin-top:1px}
+.ev.sup .ico{background:var(--ok-bg);color:var(--ok-ink)}
+.ev.con .ico{background:var(--bad-bg);color:var(--bad-ink)}
+.ev.mis .ico{background:var(--unc-bg);color:var(--unc-ink)}
+.pill{display:inline-block;margin-left:4px;padding:0 6px;border-radius:5px;background:var(--line);color:var(--muted);font-size:11px;font-weight:600;vertical-align:1px}
+.pill.strong{background:var(--ink);color:var(--bg)}
+.scores{display:grid;grid-template-columns:130px 1fr 40px;gap:6px 10px;align-items:center;margin-bottom:14px}
+.scores .lbl small{display:block;color:var(--muted);font-size:11px}
+.scores .bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.scores .bar i{display:block;height:100%;background:var(--ink);border-radius:4px}
+.scores .miss{grid-column:2/4;color:var(--muted);font-size:12px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.chips button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 10px;font-weight:600}
+.chips button:hover{border-color:var(--muted)}
+.panel-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.panel-actions button{font-size:13px;padding:6px 11px}
+.evidence-empty{padding:34px 18px;text-align:center;color:var(--muted)}
+
+/* ---------- bottom cards ---------- */
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin:0}
+.kv dt{color:var(--muted)}.kv dd{margin:0}
+.gtlist{display:flex;flex-direction:column;gap:4px;margin:8px 0;max-height:150px;overflow:auto}
+.gtlist div{display:flex;align-items:center;gap:8px;padding:4px 8px;background:var(--sunken);border-radius:7px}
+.gtlist button{margin-left:auto;border:0;background:none;color:var(--muted);padding:0 4px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:10px}
+.tile{background:var(--sunken);border-radius:9px;padding:8px 10px}
+.tile b{display:block;font-size:18px}.tile span{font-size:12px;color:var(--muted)}
+.tile.bad b{color:var(--bad-ink)}
+textarea{width:100%;height:64px;border:1px solid var(--line);border-radius:8px;background:var(--sunken);padding:8px;font:12px ui-monospace,monospace}
+details summary{cursor:pointer;color:var(--muted);font-size:12px}
+
+/* ---------- settings dialog ---------- */
+dialog{width:min(760px,94vw);max-height:92vh;border:1px solid var(--line);border-radius:16px;padding:0;background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(10,16,22,.55)}
+.dialog header{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+.dialog header h2{font-size:17px}
+.dialog header button{margin-left:auto}
+.dialog .scroll{padding:6px 20px 14px;max-height:68vh;overflow:auto}
+.dialog footer{display:flex;gap:8px;padding:12px 20px;border-top:1px solid var(--line)}
+.dialog footer .grow{flex:1}
+fieldset{border:0;padding:0;margin:16px 0 0}
+legend{font-weight:700;font-size:14px;padding:0}
+fieldset>p{color:var(--muted);font-size:12px;margin:2px 0 8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px 14px}
+.grid label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.grid input,.grid select{padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--sunken);color:var(--ink);font-size:14px}
+.grid input:disabled{opacity:.5}
+.wsum{font-size:12px;color:var(--muted);margin-top:6px}
+
+@media(max-width:1180px){.workspace{grid-template-columns:1fr}.evidence{position:static;max-height:none}}
+@media(max-width:760px){.players,.split{grid-template-columns:1fr}.top{flex-wrap:wrap;position:static}.toolbar,.workspace,.welcome{margin-left:0;margin-right:0;padding-left:14px;padding-right:14px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><h1>Motorcycle re-identification</h1><p>Evidence review across two CCTV cameras</p></div>
+  <div class="statusbar">
+    <div id="progress" hidden role="progressbar" aria-valuemin="0" aria-valuemax="100"><i></i></div>
+    <span id="status" role="status" aria-live="polite">Choose a video for each camera to begin.</span>
+    <div class="exports" id="exports" hidden>
+      <a class="btn" id="expJ" href="#" download>JSON</a><a class="btn" id="expC" href="#" download>CSV</a>
+    </div>
+  </div>
+</header>
+
+<section class="toolbar" aria-label="Videos and actions">
+  <div class="cam a"><label class="title" for="selA"><span class="dot"></span>Camera A</label>
+    <div class="row"><select id="selA"></select><label class="btn">Upload<input id="fileA" type="file" accept="video/*" hidden></label></div></div>
+  <div class="cam b"><label class="title" for="selB"><span class="dot"></span>Camera B</label>
+    <div class="row"><select id="selB"></select><label class="btn">Upload<input id="fileB" type="file" accept="video/*" hidden></label></div></div>
+  <div class="actions">
+    <button id="settingsBtn" type="button">Settings</button>
+    <button id="rematch" type="button" title="Reuse the saved tracks and score again with the current settings (seconds)">Re-match</button>
+    <button id="run" type="button" class="primary" title="Detect and track motorcycles in both videos, then match">Detect and match</button>
+  </div>
+</section>
+
+<section class="welcome" id="welcome">
+  <h2>Find the same motorcycle in two cameras</h2>
+  <p class="muted">The app tracks every motorcycle, compares them across cameras, and shows the evidence for and against each match. It is allowed to say <b>uncertain</b> or <b>no reliable match</b>.</p>
+  <div class="steps">
+    <div class="step"><b>1</b><h3>Pick two videos</h3><p>Choose a clip for Camera A and one for Camera B, or upload your own. Clips in <code>samples/</code> appear in the lists.</p></div>
+    <div class="step"><b>2</b><h3>Detect and match</h3><p>Runs detection and tracking once (a few minutes on CPU). Later changes only need <b>Re-match</b>, which takes seconds.</p></div>
+    <div class="step"><b>3</b><h3>Review the evidence</h3><p>Click a motorcycle in a video or in the list. The right panel shows why a pair is accepted, uncertain or rejected.</p></div>
+  </div>
+</section>
+
+<div class="workspace" id="app" hidden>
+  <div class="main">
+    <div class="stats" id="stats"></div>
+
+    <section class="players" aria-label="Video playback">
+      <div class="card player a"><div class="cap"><span class="dot"></span><span class="name" id="capA">Camera A</span><span class="time num" id="timeA"></span></div>
+        <div class="stage"><video id="vA" controls muted playsinline preload="metadata"></video><canvas id="cA" aria-label="Camera A tracks"></canvas></div>
+        <div class="timeline" id="tlA" aria-label="Camera A track timeline"></div></div>
+      <div class="card player b"><div class="cap"><span class="dot"></span><span class="name" id="capB">Camera B</span><span class="time num" id="timeB"></span></div>
+        <div class="stage"><video id="vB" controls muted playsinline preload="metadata"></video><canvas id="cB" aria-label="Camera B tracks"></canvas></div>
+        <div class="timeline" id="tlB" aria-label="Camera B track timeline"></div></div>
+    </section>
+    <div class="transport">
+      <button id="playBoth" type="button">▶ Play both</button><button id="pauseBoth" type="button">❚❚ Pause both</button>
+      <button id="jump" type="button" disabled>Jump to pair</button>
+      <span class="hint">Click a box in a video or a segment in a timeline to select a motorcycle · <kbd>↑</kbd> <kbd>↓</kbd> browse candidates · <kbd>J</kbd> jump</span>
+    </div>
+
+    <section class="split">
+      <div class="card"><header><h2>Tracks</h2>
+        <div class="tabs" role="tablist"><button role="tab" id="tabA" aria-selected="true">Camera A</button><button role="tab" id="tabB" aria-selected="false">Camera B</button></div>
+        <select id="filter" aria-label="Filter tracks"><option value="all">All</option><option value="accepted">Accepted</option><option value="uncertain">Uncertain</option><option value="rejected">No reliable match</option></select></header>
+        <div class="body"><div class="list" id="tracks" role="listbox"></div></div></div>
+      <div class="card"><header><h2 id="candTitle">Ranked candidates</h2></header>
+        <div class="body"><div class="list" id="cands" role="listbox"><div class="empty">Select a track.</div></div></div></div>
+    </section>
+
+    <section class="split">
+      <div class="card"><header><h2>Run summary</h2></header><div class="body"><dl class="kv" id="summary"></dl></div></div>
+      <div class="card"><header><h2>Check against ground truth</h2></header><div class="body">
+        <p class="muted small">Use <b>Same bike</b> or <b>No match</b> in the evidence panel to label pairs you know, then evaluate.</p>
+        <div class="gtlist" id="gtlist"></div>
+        <div class="panel-actions"><button id="evalBtn" type="button" class="primary">Evaluate</button><button id="gtClear" type="button">Clear</button></div>
+        <div class="tiles" id="metrics"></div>
+        <details><summary>Import or export as JSON</summary><textarea id="gtjson" spellcheck="false" placeholder='[{"a": 78, "b": 5}, {"a": 2, "b": null}]'></textarea>
+          <div class="panel-actions"><button id="gtImport" type="button">Load from JSON</button></div></details>
+      </div></div>
+    </section>
+  </div>
+
+  <aside class="card evidence" id="detail" aria-label="Evidence review"><div class="evidence-empty">Select a motorcycle to see the evidence.</div></aside>
+</div>
+
+<dialog id="settings" class="dialog" aria-labelledby="setTitle">
+  <header><h2 id="setTitle">Matching settings</h2><button type="button" id="setClose" aria-label="Close settings">✕</button></header>
+  <div class="scroll">
+    <fieldset><legend>Camera timing and direction</legend>
+      <p>How the two recordings relate in time. Auto reads recording start times from file names such as 20261106_141615.mp4.</p>
+      <div class="grid">
+        <label>Timing<select data-p="timing_mode" id="timingMode"><option value="auto">Auto from file names</option><option value="synced">Videos start together</option><option value="offset">B starts after A by an offset</option><option value="unknown">Timing unknown</option></select></label>
+        <label>B starts after A (s)<input data-p="b_offset_s" id="offset" type="number" step="0.5" value="0"></label>
+        <label>Clock uncertainty (s)<input data-p="clock_tol_s" type="number" step="0.5" value="3"></label>
+        <label>Shortest plausible travel (s)<input data-p="min_travel_s" type="number" step="0.5" value="0"></label>
+        <label>Longest plausible travel (s)<input data-p="max_travel_s" type="number" step="1" value="600"></label>
+        <label>Expected direction<select data-p="direction_mode"><option value="any">Not scored</option><option value="same">Same image direction</option><option value="opposite">Opposite direction</option></select></label>
+      </div></fieldset>
+    <fieldset><legend>Decision thresholds</legend>
+      <p>Accept needs a combined score at or above the first value (a clear winner needs 0.10 less). Below the second value a pair is rejected. Candidates closer than the margin are lookalikes.</p>
+      <div class="grid">
+        <label>Accept at or above<input data-p="accept_thr" type="number" step="0.01" value="0.80"></label>
+        <label>Reject below<input data-p="reject_thr" type="number" step="0.01" value="0.55"></label>
+        <label>Lookalike margin<input data-p="margin" type="number" step="0.01" value="0.06"></label>
+      </div></fieldset>
+    <fieldset><legend>Score weights</legend>
+      <p>Missing evidence (for example an unreadable plate) is left out and the rest is re-balanced.</p>
+      <div class="grid">
+        <label>Visual embedding<input data-w="embedding" type="number" step="0.05" value="0.30"></label>
+        <label>Body colour<input data-w="colour" type="number" step="0.05" value="0.25"></label>
+        <label>Structure and riders<input data-w="physical" type="number" step="0.05" value="0.10"></label>
+        <label>Number plate<input data-w="plate" type="number" step="0.05" value="0.15"></label>
+        <label>Timing<input data-w="temporal" type="number" step="0.05" value="0.10"></label>
+        <label>Direction<input data-w="movement" type="number" step="0.05" value="0.10"></label>
+      </div><p class="wsum" id="wsum"></p></fieldset>
+    <fieldset><legend>Similarity calibration</legend>
+      <p>Auto spreads similarity using this run's own pairs. Choose manual to set the cosine range yourself.</p>
+      <div class="grid">
+        <label>Calibration<select data-p="emb_auto"><option value="1">Auto from this run</option><option value="0">Manual range</option></select></label>
+        <label>Cosine floor<input data-p="emb_lo" type="number" step="0.05" placeholder="auto"></label>
+        <label>Cosine ceiling<input data-p="emb_hi" type="number" step="0.05" placeholder="auto"></label>
+      </div></fieldset>
+    <fieldset><legend>Detection (applies on Detect and match)</legend>
+      <div class="grid">
+        <label>Detector confidence<input data-p="det_conf" type="number" step="0.05" value="0.30"></label>
+        <label>Process every Nth frame<input data-p="stride" type="number" min="1" value="2"></label>
+        <label>Plate reading<select data-p="enable_ocr"><option value="1">On</option><option value="0">Off</option></select></label>
+      </div></fieldset>
+  </div>
+  <footer><button type="button" id="setReset">Reset to defaults</button><span class="grow"></span><button type="button" id="setApply" class="primary">Apply and re-match</button></footer>
+</dialog>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+const S={R:null,job:null,sel:null,pair:null,list:'A',filter:'all',gt:[]};
+const ICON={accepted:'✓',uncertain:'?',rejected:'✕'},LABEL={accepted:'Accepted',uncertain:'Uncertain',rejected:'Rejected'};
+const COMP={embedding:'Visual similarity',colour:'Body colour',physical:'Structure and riders',plate:'Number plate',temporal:'Timing',movement:'Direction'};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pct=x=>x==null?'n/a':Math.round(x*100)+'%';
+const chip=(st,txt)=>`<span class="chip ${st}"><b aria-hidden="true">${ICON[st]}</b>${esc(txt||LABEL[st])}</span>`;
+
+/* ---------- status ---------- */
+function setStatus(t,err){const e=$('#status');e.textContent=t;e.classList.toggle('error',!!err)}
+function setProgress(frac){const p=$('#progress');if(frac==null){p.hidden=true;return}p.hidden=false;p.setAttribute('aria-valuenow',Math.round(frac*100));$('i',p).style.width=Math.round(frac*100)+'%'}
+async function api(path,opt){
+  const r=await fetch(path,opt);
+  if(!r.ok){let m=r.statusText;try{m=(await r.json()).detail||m}catch(e){}throw new Error(m)}
+  return r.json();
+}
+
+/* ---------- videos ---------- */
+async function loadVideos(keepA,keepB){
+  const d=await api('/api/videos');
+  for(const side of ['A','B']){
+    const sel=$('#sel'+side),cur=(side==='A'?keepA:keepB)||sel.value||localStorage_get('video'+side);
+    sel.innerHTML='<option value="">Choose a video…</option>'+
+      d.videos.map(v=>`<option value="${v.id}">${esc(v.name)} · ${v.duration}s</option>`).join('')+
+      d.samples.map(n=>`<option value="sample:${esc(n)}">Sample: ${esc(n)}</option>`).join('');
+    if(cur&&[...sel.options].some(o=>o.value===cur))sel.value=cur;
+    else if(d.videos.length>(side==='A'?0:1)&&!sel.value)sel.value=d.videos[side==='A'?0:1].id;  // sensible default pair
+  }
+}
+async function upload(side,file){
+  if(!file)return;
+  setStatus('Preparing '+file.name+' for playback…');setProgress(.15);
+  const fd=new FormData();fd.append('file',file);
+  try{const m=await api('/api/videos',{method:'POST',body:fd});await loadVideos(side==='A'?m.id:null,side==='B'?m.id:null);setStatus(file.name+' is ready.')}
+  catch(e){setStatus('Upload failed: '+e.message,true)}
+  finally{setProgress(null)}
+}
+$('#fileA').onchange=e=>upload('A',e.target.files[0]);
+$('#fileB').onchange=e=>upload('B',e.target.files[0]);
+['A','B'].forEach(s=>$('#sel'+s).onchange=e=>localStorage_set('video'+s,e.target.value));
+async function resolveVideo(side){
+  let v=$('#sel'+side).value;
+  if(v.startsWith('sample:')){const m=await api('/api/videos/sample/'+encodeURIComponent(v.slice(7)),{method:'POST'});await loadVideos(side==='A'?m.id:null,side==='B'?m.id:null);v=m.id}
+  return v;
+}
+function localStorage_get(k){try{return localStorage.getItem('reid.'+k)}catch(e){return null}}
+function localStorage_set(k,v){try{localStorage.setItem('reid.'+k,v)}catch(e){}}
+
+/* ---------- settings ---------- */
+const DEFAULTS=new Map();
+$$('[data-p],[data-w]').forEach(e=>DEFAULTS.set(e,e.value));
+function collect(){
+  const p={weights:{}};
+  $$('[data-p]').forEach(e=>{
+    if(e.value==='')return;
+    p[e.dataset.p]=e.tagName==='SELECT'&&['enable_ocr','emb_auto'].includes(e.dataset.p)?e.value==='1':(e.type==='number'?parseFloat(e.value):e.value);
+  });
+  $$('[data-w]').forEach(e=>p.weights[e.dataset.w]=parseFloat(e.value)||0);
+  return p;
+}
+function saveSettings(){const o={};$$('[data-p],[data-w]').forEach(e=>o[(e.dataset.p?'p:':'w:')+(e.dataset.p||e.dataset.w)]=e.value);localStorage_set('settings',JSON.stringify(o))}
+function loadSettings(){try{const o=JSON.parse(localStorage_get('settings')||'{}');$$('[data-p],[data-w]').forEach(e=>{const k=(e.dataset.p?'p:':'w:')+(e.dataset.p||e.dataset.w);if(k in o)e.value=o[k]})}catch(e){}}
+function syncSettingsUI(){
+  $('#offset').disabled=$('#timingMode').value!=='offset';
+  const sum=$$('[data-w]').reduce((s,e)=>s+(parseFloat(e.value)||0),0);
+  $('#wsum').textContent=`Weights add up to ${sum.toFixed(2)}. They are normalised, so only the ratios matter.`;
+}
+$$('[data-p],[data-w]').forEach(e=>e.addEventListener('input',()=>{syncSettingsUI();saveSettings()}));
+$('#settingsBtn').onclick=()=>{syncSettingsUI();$('#settings').showModal()};
+$('#setClose').onclick=()=>$('#settings').close();
+$('#setReset').onclick=()=>{DEFAULTS.forEach((v,e)=>e.value=v);syncSettingsUI();saveSettings()};
+$('#setApply').onclick=()=>{$('#settings').close();run(false)};
+loadSettings();syncSettingsUI();
+
+/* ---------- run ---------- */
+async function run(redetect){
+  const btns=[$('#run'),$('#rematch')];
+  try{
+    const a=await resolveVideo('A'),b=await resolveVideo('B');
+    if(!a||!b)return setStatus('Choose a video for both cameras first.',true);
+    btns.forEach(x=>x.disabled=true);setStatus('Starting…');setProgress(.02);
+    const job=await api('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({video_a:a,video_b:b,params:collect(),redetect,ground_truth:S.gt.length?S.gt:null})});
+    S.job=job.id;
+    for(;;){
+      const j=await api('/api/jobs/'+job.id);
+      if(j.status==='error')throw new Error(j.error);
+      setStatus(`${j.stage.replace(/^\w/,c=>c.toUpperCase())}${j.message?' · '+j.message:''}`);setProgress(Math.max(.03,j.progress||0));
+      if(j.status==='done')break;
+      await new Promise(r=>setTimeout(r,700));
+    }
+    S.R=await api(`/api/jobs/${job.id}/result`);
+    S.sel=null;S.pair=null;render();
+    setStatus(S.R.timing_note||'Done.');
+  }catch(e){setStatus('Something went wrong: '+e.message,true)}
+  finally{btns.forEach(x=>x.disabled=false);setProgress(null)}
+}
+$('#run').onclick=()=>run(true);
+$('#rematch').onclick=()=>run(false);
+
+/* ---------- lookups ---------- */
+const side2=s=>s.toLowerCase();
+const trackOf=(side,id)=>S.R.videos[side2(side)].tracks.find(t=>t.id===id);
+const summaryOf=a=>S.R.summary_a.find(s=>s.a===a);
+const cand=(a,b)=>S.R.candidates.find(c=>c.a===a&&c.b===b);
+function aState(s){return s.selected_b!=null?'accepted':s.status==='uncertain'?'uncertain':'rejected'}
+function bBest(id){return S.R.candidates.find(c=>c.b===id&&c.ctx.rank_b===1)}
+
+/* ---------- render ---------- */
+function render(){
+  const R=S.R;
+  $('#welcome').hidden=true;$('#app').hidden=false;$('#exports').hidden=false;
+  $('#expJ').href=`/api/jobs/${R.job_id}/export.json`;$('#expC').href=`/api/jobs/${R.job_id}/export.csv`;
+  $('#vA').src=R.videos.a.url;$('#vB').src=R.videos.b.url;
+  $('#capA').textContent='Camera A · '+R.videos.a.name;$('#capB').textContent='Camera B · '+R.videos.b.name;
+  renderStats();renderSummary();renderTracks();renderTimelines();renderGT();showMetrics(R.metrics);
+  const order=['accepted','uncertain','rejected'];
+  const first=[...R.summary_a].sort((x,y)=>order.indexOf(aState(x))-order.indexOf(aState(y)))[0];
+  if(first)select('A',first.a,false);else $('#detail').innerHTML='<div class="evidence-empty">No motorcycle tracks were found in camera A. Try a lower detector confidence in Settings.</div>';
+}
+function renderStats(){
+  const R=S.R,c={accepted:0,uncertain:0,rejected:0};R.summary_a.forEach(s=>c[aState(s)]++);
+  const tile=(k,n,l)=>`<button class="stat ${k}" data-f="${k}" type="button"><b class="num">${n}</b><span>${l}</span></button>`;
+  $('#stats').innerHTML=tile('accepted',c.accepted,'Camera A tracks matched')+tile('uncertain',c.uncertain,'Uncertain')+tile('rejected',c.rejected,'No reliable match')+
+    `<div class="stat"><b class="num">${R.videos.a.tracks.length} · ${R.videos.b.tracks.length}</b><span>Tracks in A · B</span></div>
+     <div class="stat"><b class="num">${R.timing.pipeline_fps}</b><span>Frames per second</span></div>`;
+  $$('#stats button.stat').forEach(b=>b.onclick=()=>{S.list='A';S.filter=b.dataset.f;$('#filter').value=S.filter;renderTracks()});
+}
+function renderSummary(){
+  const R=S.R,T=R.timing,m=R.versions,pa=R.videos.a.stats,pb=R.videos.b.stats;
+  $('#summary').innerHTML=`<dt>Timing</dt><dd>${esc(R.timing_note||'Manual settings')}</dd>
+   <dt>Plates read</dt><dd>A ${pa.tracks_with_plate??'?'}/${R.videos.a.tracks.length} · B ${pb.tracks_with_plate??'?'}/${R.videos.b.tracks.length} (OCR ${esc(pa.ocr||'?')})</dd>
+   <dt>Speed</dt><dd class="num">${T.pipeline_fps} frames/s overall (${T.frames_processed} frames, ${T.total_s}s) · detector A ${pa.detector_fps} · B ${pb.detector_fps}</dd>
+   <dt>Matching and review</dt><dd class="num">${T.match_review_s}s</dd>
+   <dt>Similarity range</dt><dd class="num">${R.calibration.embedding?R.calibration.embedding.map(x=>x.toFixed(2)).join(' to ')+(R.params.emb_auto?' (auto)':''):'n/a'}</dd>
+   <dt>Models</dt><dd>${esc(m.detector)}, ${esc(m.tracker)}, ${esc(m.embedder)}, OCR ${esc(m.ocr)}</dd>`;
+}
+const qClass=q=>q>=.65?'good':q>=.4?'fair':'poor';
+function renderTracks(){
+  const R=S.R,A=S.list==='A';
+  $('#tabA').setAttribute('aria-selected',A);$('#tabB').setAttribute('aria-selected',!A);
+  $('#tabA').textContent=`Camera A (${R.videos.a.tracks.length})`;$('#tabB').textContent=`Camera B (${R.videos.b.tracks.length})`;
+  const rows=R.videos[side2(S.list)].tracks.map(t=>{
+    let st,label,sub;
+    if(A){const s=summaryOf(t.id);st=aState(s);label=s.selected_b!=null?`Matched B#${s.selected_b}`:st==='uncertain'?`Uncertain · best B#${s.top_b}`:'No reliable match'}
+    else{const b=bBest(t.id);st=b?(b.review.status==='accepted'?'accepted':b.review.status):'rejected';label=b?`Best A#${b.a} · ${LABEL[b.review.status]}`:'No candidate'}
+    return {t,st,label};
+  }).filter(r=>S.filter==='all'||r.st===S.filter);
+  $('#tracks').innerHTML=rows.length?rows.map(({t,st,label})=>`
+    <button class="row-item" type="button" role="option" data-id="${t.id}" aria-selected="${S.sel&&S.sel.side===S.list&&S.sel.id===t.id}">
+      <span class="rank num">${S.list}${t.id}</span><img src="${t.thumb}" alt="${S.list} track ${t.id}" loading="lazy">
+      <span><span class="t"><b>${S.list}#${t.id}</b>${chip(st,label)}</span>
+      <span class="small muted num">${t.t0}s to ${t.t1}s · quality ${t.quality.q.toFixed(2)}${t.plate?' · plate '+esc(t.plate.text):''}${t.merged&&t.merged.length>1?' · merged '+t.merged.map(x=>'#'+x).join(' '):''}</span></span></button>`).join(''):
+    `<div class="empty">${S.filter==='all'?'No motorcycle tracks found in this camera. Try lowering the detector confidence in Settings.':'Nothing matches this filter.'}</div>`;
+  $$('#tracks .row-item').forEach(el=>el.onclick=()=>select(S.list,+el.dataset.id,true));
+}
+$('#tabA').onclick=()=>{S.list='A';renderTracks()};$('#tabB').onclick=()=>{S.list='B';renderTracks()};
+$('#filter').onchange=e=>{S.filter=e.target.value;renderTracks()};
+
+function select(side,id,seek=true){
+  S.sel={side,id};
+  if(S.list!==side){S.list=side}
+  renderTracks();
+  const own=side==='A'?'a':'b';
+  const C=S.R.candidates.filter(c=>c[own]===id).sort((x,y)=>side==='A'?x.ctx.rank_a-y.ctx.rank_a:x.ctx.rank_b-y.ctx.rank_b).slice(0,6);
+  S.C=C;
+  $('#candTitle').textContent=`Ranked candidates for ${side}#${id}`;
+  let head='';
+  if(side==='A'){const sm=summaryOf(id),st=aState(sm);
+    head=`<div class="verdict ${st}" style="margin-bottom:10px"><div class="ic" aria-hidden="true">${ICON[st]}</div><div><h3>${sm.selected_b!=null?'Accepted match: B#'+sm.selected_b:st==='uncertain'?'No reliable match yet':'No reliable match'}</h3><p>${sm.selected_b!=null?'The independent review accepted this pair.':st==='uncertain'?'The best candidate is uncertain, so it is not selected automatically.':'Every candidate was rejected.'}</p></div></div>`}
+  $('#cands').innerHTML=head+(C.length?C.map((c,i)=>{
+    const o=side==='A'?c.b:c.a,os=side==='A'?'B':'A',t=trackOf(os,o),r=c.review;
+    return `<button class="row-item" type="button" role="option" data-a="${c.a}" data-b="${c.b}" aria-selected="false">
+      <span class="rank num">${i+1}</span><img src="${t.thumb}" alt="${os} track ${o}" loading="lazy">
+      <span><span class="t"><b>${os}#${o}</b>${chip(r.status)}</span>
+      <span class="small muted num">confidence ${pct(r.confidence)} · uncertainty ${pct(r.uncertainty)}</span>
+      <span class="meter ${r.status}" style="display:block"><i style="width:${pct(r.confidence)}"></i></span></span></button>`}).join(''):'<div class="empty">No candidates for this track.</div>');
+  $$('#cands .row-item').forEach(el=>el.onclick=()=>pick(+el.dataset.a,+el.dataset.b,true));
+  if(C.length)pick(C[0].a,C[0].b,seek);
+  else{S.pair=null;$('#detail').innerHTML='<div class="evidence-empty">No candidates for this track.</div>';$('#jump').disabled=true;markTimeline()}
+}
+function pick(a,b,seek=true){
+  S.pair={a,b};
+  $$('#cands .row-item').forEach(e=>e.setAttribute('aria-selected',String(+e.dataset.a===a&&+e.dataset.b===b)));
+  renderDetail(a,b);$('#jump').disabled=false;markTimeline();
+  if(seek)jump();
+}
+function renderDetail(a,b){
+  const c=cand(a,b),r=c.review,ta=trackOf('A',a),tb=trackOf('B',b),W=S.R.params.weights||{};
+  const wsum=Object.entries(c.components).filter(([k,v])=>v.score!=null).reduce((s,[k])=>s+(W[k]||0),0)||1;
+  const words={accepted:['Accepted match','Enough independent evidence agrees and nothing important contradicts it.'],
+    uncertain:['Uncertain — needs a human look','The evidence is promising but not decisive.'],
+    rejected:['Rejected','On this evidence these are not the same motorcycle.']}[r.status];
+  const bars=Object.entries(c.components).map(([k,v])=>v.score==null?
+    `<span class="lbl">${COMP[k]}</span><span class="miss">Missing: ${esc(v.detail)}</span>`:
+    `<span class="lbl" title="${esc(v.detail)}">${COMP[k]}<small>weight ${pct((W[k]||0)/wsum)}</small></span><span class="bar" title="${esc(v.detail)}"><i style="width:${pct(v.score)}"></i></span><span class="num">${pct(v.score)}</span>`).join('');
+  const list=(arr,cls,ico,empty)=>arr.length?`<ul class="ev ${cls}">${arr.map(i=>`<li><span class="ico" aria-hidden="true">${ico}</span><span>${esc(i.text)}<span class="pill ${i.strength}">${i.strength}</span></span></li>`).join('')}</ul>`:`<p class="muted small" style="margin-bottom:14px">${empty}</p>`;
+  const rivals=[...c.ctx.lookalikes_a.map(x=>['B',x,a,x]),...c.ctx.lookalikes_b.map(x=>['A',x,x,b])];
+  const gtHas=S.gt.find(g=>g.a===a);
+  $('#detail').innerHTML=`<div class="inner">
+    <div class="pairhead"><h2><span class="a">A#${a}</span> ↔ <span class="b">B#${b}</span></h2><span class="muted small">rank ${c.ctx.rank_a} for A · rank ${c.ctx.rank_b} for B</span></div>
+    <div class="verdict ${r.status}"><div class="ic" aria-hidden="true">${ICON[r.status]}</div><div><h3>${words[0]}</h3><p>${esc(r.reasons.join('. '))}.</p>
+      <div class="gauges"><div class="gauge"><span><b>Confidence</b><b class="num">${pct(r.confidence)}</b></span><div class="meter"><i style="width:${pct(r.confidence)}"></i></div></div>
+      <div class="gauge"><span><b>Uncertainty</b><b class="num">${pct(r.uncertainty)}</b></span><div class="meter"><i style="width:${pct(r.uncertainty)}"></i></div></div></div></div></div>
+    <div class="compare">
+      <figure><img src="${ta.thumb}" alt="Camera A track ${a}"><figcaption><b>A#${a}</b> · ${esc(ta.colours[0]?.name||'?')} · ${ta.riders} rider${ta.riders===1?'':'s'}<br>Plate ${ta.plate?esc(ta.plate.text)+' <span class="num">('+ta.plate.conf.toFixed(2)+')</span>':'not read'}</figcaption></figure>
+      <figure><img src="${tb.thumb}" alt="Camera B track ${b}"><figcaption><b>B#${b}</b> · ${esc(tb.colours[0]?.name||'?')} · ${tb.riders} rider${tb.riders===1?'':'s'}<br>Plate ${tb.plate?esc(tb.plate.text)+' <span class="num">('+tb.plate.conf.toFixed(2)+')</span>':'not read'}</figcaption></figure></div>
+    <div class="panel-actions"><button type="button" id="gtSame">✓ Same bike</button><button type="button" id="gtNone">✕ No match for A#${a}</button>${gtHas?`<span class="small muted" style="align-self:center">Labelled: ${gtHas.b==null?'no match':'B#'+gtHas.b}</span>`:''}</div>
+    <h3>Supports the match</h3>${list(r.supporting,'sup','✓','Nothing supports this match.')}
+    <h3>Conflicts with the match</h3>${list(r.contradicting,'con','✕','No conflicting evidence found.')}
+    <h3>Missing or unreliable</h3>${list(r.missing,'mis','?','Nothing important is missing.')}
+    ${rivals.length?`<h3>Competing lookalikes</h3><div class="chips">${rivals.map(x=>`<button type="button" data-a="${x[2]}" data-b="${x[3]}">${x[0]}#${x[1]}</button>`).join('')}</div>`:''}
+    <h3>Score breakdown</h3><div class="scores">${bars}</div>
+    <p class="muted small">Matcher confidence ${pct(r.matcher_confidence)} · independent reviewer ${pct(r.reviewer_confidence)} · pair tracking quality ${pct(c.q_pair)}</p></div>`;
+  $$('#detail .chips button').forEach(bt=>bt.onclick=()=>{const na=+bt.dataset.a,nb=+bt.dataset.b;if(cand(na,nb)){S.sel={side:'A',id:na};S.list='A';select('A',na,false);pick(na,nb,true)}});
+  $('#gtSame').onclick=()=>addGT(a,b);$('#gtNone').onclick=()=>addGT(a,null);
+}
+
+/* ---------- playback, overlay, timeline ---------- */
+$('#jump').onclick=jump;
+function jump(){if(!S.pair)return;const ta=trackOf('A',S.pair.a),tb=trackOf('B',S.pair.b);$('#vA').currentTime=ta.t0;$('#vB').currentTime=tb.t0}
+$('#playBoth').onclick=()=>{$('#vA').play();$('#vB').play()};
+$('#pauseBoth').onclick=()=>{$('#vA').pause();$('#vB').pause()};
+function dur(side){const v=$('#v'+side);return isFinite(v.duration)&&v.duration>0?v.duration:(S.R.videos[side2(side)].duration||1)}
+function renderTimelines(){
+  for(const side of ['A','B']){
+    const tl=$('#tl'+side),d=dur(side);
+    tl.innerHTML=S.R.videos[side2(side)].tracks.map(t=>`<button class="seg" type="button" data-id="${t.id}" title="${side}#${t.id} · ${t.t0}s to ${t.t1}s" style="left:${t.t0/d*100}%;width:${Math.max(.6,(t.t1-t.t0)/d*100)}%" aria-label="${side} track ${t.id}"></button>`).join('')+'<i class="head" style="left:0"></i>';
+    $$('.seg',tl).forEach(sg=>sg.onclick=e=>{e.stopPropagation();select(side,+sg.dataset.id,true)});
+    tl.onclick=e=>{const r=tl.getBoundingClientRect();$('#v'+side).currentTime=(e.clientX-r.left)/r.width*dur(side)};
+  }
+  markTimeline();
+}
+$('#vA').addEventListener('loadedmetadata',()=>S.R&&renderTimelines());$('#vB').addEventListener('loadedmetadata',()=>S.R&&renderTimelines());
+function markTimeline(){
+  for(const side of ['A','B']){const hot=S.pair?(side==='A'?S.pair.a:S.pair.b):null;$$('#tl'+side+' .seg').forEach(s=>s.classList.toggle('on',+s.dataset.id===hot))}
+}
+function nearest(obs,t){let lo=0,hi=obs.length-1;while(lo<hi){const m=(lo+hi)>>1;if(obs[m][0]<t)lo=m+1;else hi=m}const a=obs[Math.max(0,lo-1)],b=obs[lo];return Math.abs(a[0]-t)<Math.abs(b[0]-t)?a:b}
+function boxes(side){
+  const v=$('#v'+side),R=S.R.videos[side2(side)],t=v.currentTime,out=[];
+  for(const tr of R.tracks){
+    if(t<tr.t0-0.3||t>tr.t1+0.3)continue;
+    const o=nearest(tr.obs,t);if(Math.abs(o[0]-t)>0.5)continue;
+    out.push({id:tr.id,x1:o[1],y1:o[2],x2:o[3],y2:o[4]});
+  }
+  return out;
+}
+function draw(side){
+  if(!S.R)return;
+  const v=$('#v'+side),c=$('#c'+side),R=S.R.videos[side2(side)];
+  const w=c.clientWidth,h=c.clientHeight;if(c.width!==w||c.height!==h){c.width=w;c.height=h}
+  const g=c.getContext('2d');g.clearRect(0,0,w,h);
+  $('#time'+side).textContent=v.currentTime.toFixed(1)+' / '+dur(side).toFixed(1)+'s';
+  const head=$('#tl'+side+' .head');if(head)head.style.left=(v.currentTime/dur(side)*100)+'%';
+  if(!v.videoWidth)return;
+  const sx=w/R.width,sy=h/R.height,hot=S.pair?(side==='A'?S.pair.a:S.pair.b):null;
+  const col=getComputedStyle(document.documentElement).getPropertyValue(side==='A'?'--a':'--b').trim();
+  g.font='600 12px system-ui';
+  for(const b of boxes(side)){
+    const on=b.id===hot,x=b.x1*sx,y=b.y1*sy,bw=(b.x2-b.x1)*sx,bh=(b.y2-b.y1)*sy;
+    if(on){g.lineWidth=5;g.strokeStyle='rgba(255,255,255,.85)';g.strokeRect(x,y,bw,bh)}
+    g.lineWidth=on?3:1.5;g.strokeStyle=col;g.globalAlpha=on?1:.65;g.strokeRect(x,y,bw,bh);g.globalAlpha=1;
+    const label=side+'#'+b.id,tw=g.measureText(label).width+10,ly=Math.max(0,y-18);
+    g.fillStyle=col;g.fillRect(x,ly,tw,18);g.fillStyle='#fff';g.fillText(label,x+5,ly+13);
+  }
+}
+(function loop(){draw('A');draw('B');requestAnimationFrame(loop)})();
+for(const side of ['A','B']){
+  $('#c'+side).onclick=e=>{
+    if(!S.R)return;
+    const r=e.target.getBoundingClientRect(),R=S.R.videos[side2(side)];
+    const x=(e.clientX-r.left)*R.width/r.width,y=(e.clientY-r.top)*R.height/r.height;
+    const hit=boxes(side).filter(b=>x>=b.x1&&x<=b.x2&&y>=b.y1&&y<=b.y2).sort((p,q)=>(p.x2-p.x1)*(p.y2-p.y1)-(q.x2-q.x1)*(q.y2-q.y1))[0];
+    if(hit)select(side,hit.id,false);
+  };
+}
+document.addEventListener('keydown',e=>{
+  if(!S.R||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)||$('#settings').open)return;
+  if(e.key==='j'||e.key==='J'){jump();return}
+  if((e.key==='ArrowDown'||e.key==='ArrowUp')&&S.C&&S.C.length&&S.pair){
+    const side=S.sel.side,own=side==='A'?'b':'a',i=S.C.findIndex(c=>c.a===S.pair.a&&c.b===S.pair.b);
+    const n=S.C[Math.min(S.C.length-1,Math.max(0,i+(e.key==='ArrowDown'?1:-1)))];
+    if(n){e.preventDefault();pick(n.a,n.b,false)}
+  }
+});
+
+/* ---------- ground truth and metrics ---------- */
+function addGT(a,b){S.gt=S.gt.filter(g=>g.a!==a);S.gt.push({a,b});S.gt.sort((x,y)=>x.a-y.a);renderGT();if(S.pair)renderDetail(S.pair.a,S.pair.b)}
+function renderGT(){
+  $('#gtlist').innerHTML=S.gt.length?S.gt.map(g=>`<div><span>A#${g.a} ${g.b==null?'has no match in camera B':'is the same bike as B#'+g.b}</span><button type="button" data-a="${g.a}" aria-label="Remove label for A#${g.a}">✕</button></div>`).join(''):'<p class="muted small">No labels yet.</p>';
+  $$('#gtlist button').forEach(b=>b.onclick=()=>{S.gt=S.gt.filter(g=>g.a!==+b.dataset.a);renderGT()});
+  $('#gtjson').value=S.gt.length?JSON.stringify(S.gt):'';
+}
+$('#gtClear').onclick=()=>{S.gt=[];renderGT();showMetrics(null)};
+$('#gtImport').onclick=()=>{try{const v=JSON.parse($('#gtjson').value);if(!Array.isArray(v))throw new Error('expected a list');S.gt=v.map(x=>({a:+x.a,b:x.b==null?null:+x.b}));renderGT()}catch(e){setStatus('Ground truth JSON must look like [{"a":78,"b":5}]. '+e.message,true)}};
+function showMetrics(m){
+  const f=x=>x==null?'n/a':x.toFixed(2);
+  $('#metrics').innerHTML=m?`<div class="tile"><b class="num">${m.true_matches}</b><span>True matches accepted</span></div>
+    <div class="tile ${m.false_matches?'bad':''}"><b class="num">${m.false_matches}</b><span>False matches accepted</span></div>
+    <div class="tile"><b class="num">${m.missed_matches}</b><span>Missed (uncertain or rejected)</span></div>
+    <div class="tile"><b class="num">${m.correct_rejections}</b><span>Correct rejections</span></div>
+    <div class="tile"><b class="num">${f(m.precision)}</b><span>Precision</span></div><div class="tile"><b class="num">${f(m.recall)}</b><span>Recall</span></div>
+    <div class="tile"><b class="num">${f(m.f1)}</b><span>F1</span></div><div class="tile"><b class="num">${f(m.top1_accuracy)}</b><span>Top-1 accuracy</span></div>`:'';
+}
+$('#evalBtn').onclick=async()=>{
+  if(!S.job)return setStatus('Run an analysis first.',true);
+  if(!S.gt.length)return setStatus('Label at least one pair first: use Same bike or No match in the evidence panel.',true);
+  try{showMetrics(await api(`/api/jobs/${S.job}/evaluate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ground_truth:S.gt})}));setStatus('Evaluation updated.')}
+  catch(e){setStatus('Evaluation failed: '+e.message,true)}
+};
+
+loadVideos().catch(e=>setStatus('Could not load videos: '+e.message,true));
+renderGT();
+</script>
+</body>
+</html>

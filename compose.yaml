@@ -1,0 +1,9 @@
+services:
+  reid:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data          # uploads, cached tracks, results
+      - ./samples:/samples:ro # drop your CCTV clips here; they appear in the UI dropdown
+    restart: unless-stopped

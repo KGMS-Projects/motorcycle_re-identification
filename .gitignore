@@ -1,0 +1,8 @@
+data/*
+!data/.gitkeep
+samples/*
+!samples/.gitkeep
+__pycache__/
+*.pyc
+.pytest_cache/
+*.pt
